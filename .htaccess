@@ -1,0 +1,94 @@
+# =============================================================================
+# BrewGo Coffee - Laravel project root .htaccess
+#
+# Target: shared hosting (InfinityFree) where htdocs/ IS the Laravel root,
+# i.e. htdocs/artisan, htdocs/app, htdocs/vendor, htdocs/.env, htdocs/public.
+#
+# Job: push every request into public/ so only the public/ tree (index.php,
+# CSS/JS/images, robots.txt, favicon) is reachable. Nothing from app/,
+# config/, database/, routes/, resources/, storage/ or vendor/ can be served
+# straight off the web root.
+#
+# Requires Apache 2.4 + mod_rewrite (both available on InfinityFree).
+# =============================================================================
+
+# Never list directory contents (vendor/, storage/, .git/, ...).
+Options -Indexes
+
+# -----------------------------------------------------------------------------
+# 1. Deny hidden and sensitive files by name.
+#
+# This works even if mod_rewrite is unavailable, so it is the safety net for
+# .env, .git, composer files, backups and database dumps. <FilesMatch> is
+# inherited by sub-directories, so it also protects public/.
+#
+# Note: .well-known is not matched because the pattern only tests the file
+# name (the "acme-challenge" file name does not start with a dot).
+# -----------------------------------------------------------------------------
+<FilesMatch "(?i)^(\.|composer\.(json|lock)|artisan|package(-lock)?\.json|vite\.config\.js|phpunit\.xml(\.dist)?|README\.md|AGENTS\.md|CLAUDE\.md|boost\.json|.*\.(bak|backup|old|orig|save|swp|sql|log|env))$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # -------------------------------------------------------------------------
+    # 2. Pass the Authorization / XSRF headers through to PHP.
+    #    Some Apache/CGI setups strip them, which breaks API auth and CSRF.
+    # -------------------------------------------------------------------------
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    RewriteCond %{HTTP:x-xsrf-token} .
+    RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
+
+    # -------------------------------------------------------------------------
+    # 3. Hard deny dot-files and dot-directories (.env, .git, .htaccess ...).
+    #    .well-known is exempt so SSL / domain validation keeps working.
+    # -------------------------------------------------------------------------
+    RewriteRule (^|/)\.(?!well-known) - [F,L]
+
+    # -------------------------------------------------------------------------
+    # 4. Hard deny Laravel source / framework directories.
+    #    These are also unreachable through the public/ rewrite below; this is
+    #    defence in depth in case the rewrite ever stops applying.
+    #
+    #    "vendor" and "storage" are deliberately NOT blocked here:
+    #      - asset('vendor/...') is used by the views, so /vendor/... must keep
+    #        working (it is served from public/vendor/).
+    #      - /storage/... must keep working if public/storage (storage:link) is
+    #        ever created for uploaded files.
+    #    The root copies are still unreachable because everything is forwarded
+    #    into public/. Only executable/data files under those two URLs are
+    #    blocked by rule 5.
+    # -------------------------------------------------------------------------
+    RewriteRule ^(?:app|bootstrap|config|database|resources|routes|tests|node_modules)(?:/|$) - [F,L]
+
+    # -------------------------------------------------------------------------
+    # 5. Block PHP/backup/config file types under /vendor/ and /storage/.
+    #    public/vendor only contains .css/.js/.woff/.woff2, so real assets are
+    #    unaffected while e.g. /vendor/autoload.php returns 403 instead of 404.
+    # -------------------------------------------------------------------------
+    RewriteRule ^(?:storage|vendor)/.*\.(?:php\d?|phtml|phar|ini|log|sql|env|json|lock|md|ya?ml|xml|dist)$ - [F,L]
+
+    # -------------------------------------------------------------------------
+    # 6. Block public/reports/ - it holds internal system-analysis documents
+    #    (and references to secrets) that are not part of the storefront.
+    #    Delete this rule if those files are meant to be downloadable.
+    # -------------------------------------------------------------------------
+    RewriteRule ^reports(?:/|$) - [F,L]
+
+    # -------------------------------------------------------------------------
+    # 7. Send everything else into public/.
+    #
+    #    The negative look-ahead (?!public/) is what prevents a rewrite loop:
+    #    after /about is rewritten to public/about the request is processed
+    #    again, but "public/about" no longer matches, so it stops there.
+    #    public/.htaccess then serves real files and routes the rest through
+    #    public/index.php.
+    #
+    #    .well-known is left alone so SSL/domain validation files can be
+    #    dropped into htdocs/.well-known/ and served directly.
+    # -------------------------------------------------------------------------
+    RewriteRule ^(?!public/)(?!\.well-known/)(.*)$ public/$1 [L]
+</IfModule>

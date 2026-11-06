@@ -1,0 +1,57 @@
+# =============================================================================
+# BrewGo Coffee - public/.htaccess
+#
+# Laravel front controller + hardening for the only directory that should ever
+# be reachable. Works both when:
+#   - the project root is the web root (htdocs/.htaccess forwards to public/),
+#   - public/ itself is the web root (classic shared-hosting layout),
+#   - the project sits in a sub-directory (no RewriteBase needed).
+# =============================================================================
+
+<IfModule mod_negotiation.c>
+    Options -MultiViews
+</IfModule>
+
+# Serve public/index.php for directory requests (e.g. "/").
+DirectoryIndex index.php
+
+# Never list directory contents.
+Options -Indexes
+
+# -----------------------------------------------------------------------------
+# Deny hidden and sensitive files by name.
+# Inherited from the project root when the root .htaccess is present; kept here
+# too so this file is safe on its own if public/ is the document root.
+# -----------------------------------------------------------------------------
+<FilesMatch "(?i)^(\.|composer\.(json|lock)|artisan|package(-lock)?\.json|vite\.config\.js|phpunit\.xml(\.dist)?|README\.md|AGENTS\.md|CLAUDE\.md|boost\.json|.*\.(bak|backup|old|orig|save|swp|sql|log|env))$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Handle Authorization Header
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    # Handle X-XSRF-Token Header
+    RewriteCond %{HTTP:x-xsrf-token} .
+    RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
+
+    # Block the internal system-analysis documents in public/reports/.
+    # Remove this rule if those files should be downloadable.
+    RewriteRule ^reports(?:/|$) - [F,L]
+
+    # Redirect Trailing Slashes If Not A Folder...
+    # The extra "!/public/" guard stops this redirect from ever producing a
+    # /public/... URL when the project root (not public/) is the web root.
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_URI} !/public/
+    RewriteCond %{REQUEST_URI} (.+)/$
+    RewriteRule ^ %1 [L,R=301]
+
+    # Send Requests To Front Controller...
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^ index.php [L]
+</IfModule>
