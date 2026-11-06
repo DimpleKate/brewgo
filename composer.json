@@ -66,10 +66,7 @@
         ],
         "vercel": [
             "npm install",
-            "npm run build",
-            "@php -r \"file_exists('database/database.sqlite') || touch('database/database.sqlite');\"",
-            "DB_DATABASE=database/database.sqlite php artisan migrate --force",
-            "DB_DATABASE=database/database.sqlite php artisan db:seed --class=DemoCatalogSeeder --force"
+            "npm run build"
         ],
         "pre-package-uninstall": [
             "Illuminate\\Foundation\\ComposerScripts::prePackageUninstall"
