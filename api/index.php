@@ -11,6 +11,13 @@ if (!file_exists($runtimeDatabase) && file_exists($bundledDatabase)) {
     @copy($bundledDatabase, $runtimeDatabase);
 }
 
+if (!file_exists($runtimeDatabase)) {
+    @touch($runtimeDatabase);
+    $base = escapeshellarg(__DIR__ . '/..');
+    @exec("cd {$base} && php artisan migrate --force 2>&1");
+    @exec("cd {$base} && php artisan db:seed --class=DemoCatalogSeeder --force 2>&1");
+}
+
 $uri = urldecode(
     parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?? ''
 );
